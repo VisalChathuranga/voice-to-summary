@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+  <body style="font-family: ui-sans-serif; max-width: 720px; margin: 32px auto;">
+    <h2>Transcribe → Classify → Summarize</h2>
+    <input id="file" type="file" accept=".mp3,.webm">
+    <button id="go">Run</button>
+    <pre id="out" style="white-space:pre-wrap; background:#f8fafc; padding:12px; border:1px solid #e2e8f0; border-radius:8px; margin-top:12px;"></pre>
+    <script>
+      const out = document.getElementById('out');
+      document.getElementById('go').onclick = async () => {
+        const f = document.getElementById('file').files[0];
+        if (!f) return alert('Pick a file');
+        const fd = new FormData(); fd.append('file', f);
+        out.textContent = 'Processing...';
+        const res = await fetch('/api/transcribe-and-summarize', { method:'POST', body: fd });
+        out.textContent = JSON.stringify(await res.json(), null, 2);
+      };
+    </script>
+  </body>
+</html>

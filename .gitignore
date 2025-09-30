@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv*/
+env/
+venv/
+*.log
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Project secrets/output
+.env
+.env.*
+transcripts/
+local_audio/
+*.json
+
+# Node (if any UI in the future)
+node_modules/
+
+# .NET client build artifacts
+**/bin/
+**/obj/

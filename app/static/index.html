@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MedScribe Pro - Medical Transcription Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+    :root{
+      --primary-50:#eff6ff;--primary-100:#dbeafe;--primary-500:#3b82f6;--primary-600:#2563eb;--primary-700:#1d4ed8;
+      --success-50:#f0fdf4;--success-500:#22c55e;--success-600:#16a34a;
+      --danger-50:#fef2f2;--danger-500:#ef4444;--danger-600:#dc2626;
+      --gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-500:#6b7280;--gray-700:#374151;--gray-900:#111827;
+    }
+    body{background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%);color:var(--gray-900);}
+    .card{background:white;border-radius:16px;box-shadow:0 1px 3px 0 rgba(0,0,0,.1),0 1px 2px 0 rgba(0,0,0,.06);border:1px solid var(--gray-200);transition:all .2s cubic-bezier(.4,0,.2,1);}
+    .card:hover{box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.06);}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.75rem 1.5rem;font-weight:500;border-radius:8px;font-size:.875rem;line-height:1.25rem;transition:all .15s cubic-bezier(.4,0,.2,1);border:1px solid transparent;text-decoration:none;cursor:pointer;}
+    .btn:disabled{opacity:.6;cursor:not-allowed;}
+    .btn-primary{background-color:var(--primary-600);color:white;}
+    .btn-primary:hover:not(:disabled){background-color:var(--primary-700);}
+    .btn-success{background-color:var(--success-600);color:white;}
+    .btn-success:hover:not(:disabled){filter:brightness(1.1);}
+    .btn-danger{background-color:var(--danger-600);color:white;}
+    .btn-danger:hover:not(:disabled){filter:brightness(1.1);}
+    .btn-outline{background:#fff;color:var(--gray-700);border-color:var(--gray-200);}
+    .btn-outline:hover{background:var(--gray-50);}
+    .recording-indicator{animation:pulse 2s cubic-bezier(.4,0,.6,1) infinite;}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    .fade-in{animation:fadeIn .3s ease-out forwards}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .status-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.375rem .75rem;font-size:.75rem;font-weight:500;border-radius:9999px}
+    .status-idle{background:var(--gray-100);color:var(--gray-700)}
+    .status-recording{background:var(--danger-50);color:var(--danger-600)}
+    .status-processing{background:var(--primary-50);color:var(--primary-600)}
+    .status-complete{background:var(--success-50);color:var(--success-600)}
+    .transcript-text{line-height:1.7;font-size:.9375rem}
+    .file-input{border:2px dashed var(--gray-200);border-radius:12px;padding:2rem;text-align:center;transition:all .2s ease;background:var(--gray-50)}
+    .file-input:hover{border-color:var(--primary-300);background:var(--primary-50)}
+    .file-input.drag-over{border-color:var(--primary-500);background:var(--primary-50)}
+    .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem}
+    .metric-card{background:var(--gray-50);border:1px solid var(--gray-200);border-radius:12px;padding:1rem;text-align:center}
+    .metric-value{font-size:1.5rem;font-weight:700;color:var(--primary-600);margin-bottom:.25rem}
+    .metric-label{font-size:.75rem;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em}
+    .header-logo{background:linear-gradient(135deg,var(--primary-500),var(--primary-600));width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center}
+    .speaker-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.875rem;font-weight:600;color:#fff;flex-shrink:0}
+    .speaker-physician{background:linear-gradient(135deg,var(--primary-500),var(--primary-600))}
+    .speaker-patient{background:linear-gradient(135deg,var(--success-500),var(--success-600))}
+    .file-chip{display:flex;align-items:center;gap:.5rem;background:var(--gray-100);border:1px solid var(--gray-200);border-radius:10px;padding:.5rem .75rem}
+    .file-chip .dot{width:8px;height:8px;border-radius:9999px;background:var(--primary-500)}
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="max-w-7xl mx-auto px-4 py-6">
+    <!-- Header -->
+    <header class="mb-8">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="header-logo">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900">MedScribe Pro</h1>
+            <p class="text-sm text-gray-500">HIPAA-Compliant Medical Transcription</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div id="sessionStatus" class="status-badge status-idle">
+            <div class="w-2 h-2 rounded-full bg-current"></div>
+            <span>Ready</span>
+          </div>
+          <div class="text-right text-xs text-gray-500">
+            <div>Session: <span id="sessionId">MTS-2025-001</span></div>
+            <div id="timestamp">Sep 23, 2025 • 10:30 AM</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Left: Recording + Transcript -->
+      <div class="lg:col-span-2 space-y-6">
+        <!-- Audio Input -->
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+              </svg>
+              Audio Input
+            </h2>
+            <div id="recordingTimer" class="text-2xl font-mono font-bold text-gray-700">00:00</div>
+          </div>
+
+          <!-- Controls -->
+          <div class="flex flex-col sm:flex-row items-center gap-4 mb-6">
+            <button id="recordBtn" class="btn btn-primary min-w-[140px]">
+              <svg id="recordIcon" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+              </svg>
+              <span id="recordBtnText">Start Recording</span>
+            </button>
+            <div class="text-sm text-gray-500 flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+              </svg>
+              <span>Encrypted & HIPAA Compliant</span>
+            </div>
+          </div>
+
+          <!-- Drop Zone -->
+          <div class="border-t pt-6">
+            <div class="file-input" id="dropZone">
+              <input type="file" id="fileInput" accept=".webm,.m4a,.mp3,.wav,audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/*" class="hidden" />
+              <div id="dropZoneContent">
+                <svg class="w-8 h-8 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+                <p class="text-sm font-medium text-gray-700 mb-1">Drop audio file here or click to browse</p>
+                <p class="text-xs text-gray-500">Supports MP3, WAV, M4A, WEBM (Max 100MB)</p>
+              </div>
+              <!-- File info area (filled when a file is selected) -->
+              <div id="fileInfo" class="mt-4 hidden">
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                  <div class="file-chip">
+                    <span class="dot"></span>
+                    <span id="fileName" class="font-medium text-gray-800">recording.webm</span>
+                    <span id="fileSize" class="text-gray-500 text-xs">(0.00 MB)</span>
+                  </div>
+                  <audio id="audioPreview" controls class="w-full sm:w-auto sm:min-w-[260px]"></audio>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transcript -->
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              Transcript
+            </h2>
+            <div id="processingIndicator" class="hidden flex items-center gap-2 text-primary-600">
+              <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+              <span class="text-sm font-medium">Processing...</span>
+            </div>
+          </div>
+
+          <div id="transcriptContainer" class="max-h-96 overflow-y-auto">
+            <div class="text-center py-12 text-gray-400" id="emptyState">
+              <svg class="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+              </svg>
+              <p class="text-base font-medium mb-2">No transcript available</p>
+              <p class="text-sm">Start recording or upload an audio file to begin transcription</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Sidebar -->
+      <div class="space-y-6">
+        <div class="card p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Session Metrics</h3>
+          <div class="metrics-grid">
+            <div class="metric-card"><div id="duration" class="metric-value">00:00</div><div class="metric-label">Duration</div></div>
+            <div class="metric-card"><div id="confidence" class="metric-value">--%</div><div class="metric-label">Confidence</div></div>
+            <div class="metric-card"><div id="wordCount" class="metric-value">0</div><div class="metric-label">Words</div></div>
+            <div class="metric-card"><div id="speakers" class="metric-value">0</div><div class="metric-label">Speakers</div></div>
+          </div>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
+          <div class="space-y-3">
+            <button id="transcribeBtn" class="btn btn-success w-full" disabled>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+              </svg>
+              Start Transcription
+            </button>
+            <a id="downloadBtn" href="#" class="btn btn-outline w-full hidden">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              Download Transcript
+            </a>
+            <button id="clearBtn" class="btn btn-danger w-full">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+              Clear Session
+            </button>
+          </div>
+        </div>
+
+        <div class="card p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">System Information</h3>
+          <div class="space-y-3 text-sm text-gray-600">
+            <div class="flex justify-between"><span>Engine:</span><span class="font-medium">AWS Transcribe Medical</span></div>
+            <div class="flex justify-between"><span>Storage:</span><span class="font-medium">Amazon S3</span></div>
+            <div class="flex justify-between"><span>Encryption:</span><span class="font-medium text-green-600">AES-256</span></div>
+            <div class="flex justify-between"><span>Compliance:</span><span class="font-medium text-green-600">HIPAA</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-12">
+      <div class="card p-8 text-center">
+        <div class="flex flex-col items-center justify-center space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+              </svg>
+            </div>
+            <div class="text-left">
+              <h3 class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">MEDCUBEUSA</h3>
+              <p class="text-sm text-gray-500">Advanced Medical Technology Solutions</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-600">
+            <div class="flex items-center gap-2"><div class="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+              <svg class="w-4 h-4 text-orange-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7v10c0 5.55 3.84 9.739 9 11 5.16-1.261 9-5.45 9-11V7l-10-5z"/></svg></div>
+              <span class="font-medium">AWS Transcribe Medical</span></div>
+            <div class="flex items-center gap-2"><div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+              <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-2.5c0-2.33 4.67-3.5 7-3.5s7 1.17 7 3.5V19z"/></svg></div>
+              <span class="font-medium">HIPAA Compliant</span></div>
+            <div class="flex items-center gap-2"><div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+              <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></div>
+              <span class="font-medium">Real-time Processing</span></div>
+          </div>
+          <div class="border-t border-gray-200 pt-4 w-full">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div class="text-sm text-gray-500">© 2025 MEDCUBEUSA. All rights reserved. | <span class="text-green-600 font-medium">Enterprise Medical Solutions</span></div>
+              <div class="flex items-center gap-6 text-sm">
+                <a href="#" class="text-gray-500 hover:text-blue-600 transition-colors">Privacy Policy</a>
+                <a href="#" class="text-gray-500 hover:text-blue-600 transition-colors">Terms of Service</a>
+                <a href="#" class="text-gray-500 hover:text-blue-600 transition-colors">Support</a>
+                <div class="flex items-center gap-1 text-green-600"><div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div><span class="font-medium">System Operational</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+<script>
+(() => {
+  const elements = {
+    recordBtn: document.getElementById('recordBtn'),
+    recordIcon: document.getElementById('recordIcon'),
+    recordBtnText: document.getElementById('recordBtnText'),
+    recordingTimer: document.getElementById('recordingTimer'),
+    fileInput: document.getElementById('fileInput'),
+    dropZone: document.getElementById('dropZone'),
+    dropZoneContent: document.getElementById('dropZoneContent'),
+    fileInfo: document.getElementById('fileInfo'),
+    fileName: document.getElementById('fileName'),
+    fileSize: document.getElementById('fileSize'),
+    audioPreview: document.getElementById('audioPreview'),
+    transcribeBtn: document.getElementById('transcribeBtn'),
+    clearBtn: document.getElementById('clearBtn'),
+    downloadBtn: document.getElementById('downloadBtn'),
+    transcriptContainer: document.getElementById('transcriptContainer'),
+    emptyState: document.getElementById('emptyState'),
+    processingIndicator: document.getElementById('processingIndicator'),
+    sessionStatus: document.getElementById('sessionStatus'),
+    sessionId: document.getElementById('sessionId'),
+    timestamp: document.getElementById('timestamp'),
+    duration: document.getElementById('duration'),
+    confidence: document.getElementById('confidence'),
+    wordCount: document.getElementById('wordCount'),
+    speakers: document.getElementById('speakers')
+  };
+
+  let state = {
+    isRecording: false,
+    mediaRecorder: null,
+    audioChunks: [],
+    startTime: null,
+    timerInterval: null,
+    currentFile: null,
+    transcriptData: null
+  };
+
+  function formatTime(seconds){const m=String(Math.floor(seconds/60)).padStart(2,'0');const s=String(seconds%60).padStart(2,'0');return `${m}:${s}`;}
+  function updateTimestamp(){elements.timestamp.textContent=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}
+  function updateSessionStatus(status,text){elements.sessionStatus.className=`status-badge status-${status}`;elements.sessionStatus.querySelector('span').textContent=text}
+
+  function startTimer(){let elapsed=0;elements.recordingTimer.textContent=formatTime(elapsed);state.timerInterval=setInterval(()=>{elapsed++;elements.recordingTimer.textContent=formatTime(elapsed);elements.duration.textContent=formatTime(elapsed)},1000)}
+  function stopTimer(){if(state.timerInterval){clearInterval(state.timerInterval);state.timerInterval=null}}
+
+  // ---- File UI helpers ----
+  function showFileUI(file, blobUrl){
+    // Hide dropZone instructions, show file info + preview
+    elements.dropZoneContent.classList.add('hidden');
+    elements.fileInfo.classList.remove('hidden');
+    elements.fileName.textContent = file.name;
+    elements.fileSize.textContent = `(${(file.size/(1024*1024)).toFixed(2)} MB)`;
+    elements.audioPreview.src = blobUrl || URL.createObjectURL(file);
+    elements.audioPreview.load();
+    elements.transcribeBtn.disabled = false;
+    updateSessionStatus('idle','File Ready');
+  }
+
+  function resetDropZoneUI(){
+    elements.dropZoneContent.classList.remove('hidden');
+    elements.fileInfo.classList.add('hidden');
+    elements.audioPreview.src = '';
+  }
+
+  // ---- Recording ----
+  async function startRecording(){
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+      state.mediaRecorder = new MediaRecorder(stream);
+      state.audioChunks = [];
+      state.startTime = Date.now();
+
+      state.mediaRecorder.ondataavailable = e => { if(e.data.size>0){ state.audioChunks.push(e.data); } };
+
+      // Do NOT auto-start transcription; just prepare file + UI
+      state.mediaRecorder.onstop = () => {
+        const blob = new Blob(state.audioChunks,{type:'audio/webm'});
+        const file = new File([blob], `recording_${new Date().toISOString().replace(/[:.]/g,'-')}.webm`, {type:'audio/webm'});
+        state.currentFile = file;
+
+        // update input
+        const dt = new DataTransfer(); dt.items.add(file); elements.fileInput.files = dt.files;
+
+        // show in UI
+        showFileUI(file, URL.createObjectURL(blob));
+        stopTimer();
+      };
+
+      state.mediaRecorder.start();
+      state.isRecording = true;
+
+      // UI changes
+      elements.recordIcon.innerHTML = '<rect x="6" y="6" width="12" height="12" fill="currentColor"/>';
+      elements.recordBtnText.textContent = 'Stop Recording';
+      elements.recordBtn.classList.remove('btn-primary');elements.recordBtn.classList.add('btn-danger');
+      updateSessionStatus('recording','Recording');
+      startTimer();
+
+    }catch(err){
+      console.error(err);
+      alert('Could not access microphone. Please check permissions and try again.');
+    }
+  }
+
+  function stopRecording(){
+    if(state.mediaRecorder && state.isRecording){
+      state.mediaRecorder.stop();
+      state.mediaRecorder.stream.getTracks().forEach(t=>t.stop());
+      state.isRecording=false;
+
+      // reset button visuals
+      elements.recordIcon.innerHTML = `
+        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+      `;
+      elements.recordBtnText.textContent='Start Recording';
+      elements.recordBtn.classList.remove('btn-danger');elements.recordBtn.classList.add('btn-primary');
+      updateSessionStatus('idle','File Ready');
+    }
+  }
+
+  // ---- File selection ----
+  function handleFileSelect(file){
+    if(file && file.type.startsWith('audio/')){
+      state.currentFile = file;
+      const dt = new DataTransfer(); dt.items.add(file); elements.fileInput.files = dt.files;
+      showFileUI(file);
+    }else{
+      alert('Please select a valid audio file.');
+    }
+  }
+
+  // ---- Transcription ----
+  async function transcribeAudio(){
+    if(!state.currentFile){alert('Please record or select an audio file first.');return;}
+
+    elements.transcribeBtn.disabled = true;
+    elements.transcribeBtn.innerHTML = `
+      <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+      </svg>
+      Processing...
+    `;
+    updateSessionStatus('processing','Transcribing');
+    elements.processingIndicator.classList.remove('hidden');
+
+    elements.emptyState.innerHTML = `
+      <svg class="w-12 h-12 mx-auto mb-4 text-primary-500 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+      </svg>
+      <p class="text-base font-medium mb-2 text-primary-600">Processing Audio</p>
+      <p class="text-sm">Analyzing speech patterns and generating transcript...</p>
+    `;
+
+    try{
+      const fd=new FormData(); fd.append('file', state.currentFile, state.currentFile.name);
+      const res=await fetch('/api/transcribe-and-summarize',{method:'POST', body:fd});
+      if(!res.ok) throw new Error(await res.text());
+      const data=await res.json(); state.transcriptData=data;
+
+      renderTranscript(data.turns); updateMetrics(data);
+      // show summary if present
+      if (data.summary && data.summary.summary_text) {
+      const s = document.createElement('div');
+      s.className = 'mt-4 p-4 bg-blue-50 border border-blue-200 rounded';
+      s.textContent = data.summary.summary_text;
+      document.getElementById('transcriptContainer').prepend(s);
+      }
+      elements.downloadBtn.href=data.download_url; elements.downloadBtn.classList.remove('hidden');
+      updateSessionStatus('complete','Complete');
+    }catch(err){
+      console.error(err); alert('Transcription failed: '+err.message);
+      elements.emptyState.innerHTML = `
+        <svg class="w-12 h-12 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <p class="text-base font-medium mb-2 text-red-600">Transcription Failed</p>
+        <p class="text-sm">Please try again or contact support if the issue persists.</p>
+      `;
+      updateSessionStatus('idle','Error');
+    }finally{
+      elements.transcribeBtn.disabled=false;
+      elements.transcribeBtn.innerHTML = `
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        Start Transcription
+      `;
+      elements.processingIndicator.classList.add('hidden');
+    }
+  }
+
+  function renderTranscript(turns){
+    elements.emptyState.style.display='none';
+    const html = (turns||[]).map((t,i)=>{
+      const speakerClass = t.speaker.toLowerCase().includes('physician') ? 'speaker-physician' : 'speaker-patient';
+      const initial = t.speaker?.[0]?.toUpperCase() || 'S';
+      return `
+      <div class="mb-6 fade-in" style="animation-delay:${i*0.1}s">
+        <div class="flex items-start gap-3">
+          <div class="speaker-avatar ${speakerClass}">${initial}</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-sm font-semibold text-gray-900">${t.speaker||'Speaker'}</span>
+            </div>
+            <div class="transcript-text text-gray-700 leading-relaxed">
+              ${(t.words||[]).map(w=>`<span class="word">${(w.text||'')}</span>`).join(' ')}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    elements.transcriptContainer.innerHTML = html || '<div class="py-10 text-center text-gray-400">No content</div>';
+    elements.transcriptContainer.scrollTop = elements.transcriptContainer.scrollHeight;
+  }
+
+  function updateMetrics(data){
+    const totalWords = (data.turns||[]).reduce((n,t)=>n + ((t.words||[]).length),0);
+    const conf = data.document_confidence || 0;
+    const speakers = (data.turns||[]).length ? new Set(data.turns.map(t=>t.speaker)).size : 0;
+    elements.confidence.textContent = `${Math.round(conf*100)}%`;
+    elements.wordCount.textContent = totalWords.toLocaleString();
+    elements.speakers.textContent = speakers;
+  }
+
+  async function clearSession(){
+    if(!confirm('This will clear all session data and cannot be undone. Continue?')) return;
+    elements.clearBtn.disabled=true;
+    elements.clearBtn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Clearing...`;
+    try{
+      const res=await fetch('/api/clear',{method:'POST'}); if(!res.ok) throw new Error(await res.text());
+      resetSession();
+    }catch(err){ console.error(err); alert('Failed to clear session: '+err.message);}
+    finally{
+      elements.clearBtn.disabled=false;
+      elements.clearBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg> Clear Session`;
+    }
+  }
+
+  function resetSession(){
+    if(state.isRecording) stopRecording();
+    state={isRecording:false,mediaRecorder:null,audioChunks:[],startTime:null,timerInterval:null,currentFile:null,transcriptData:null};
+    elements.fileInput.value='';
+    elements.transcribeBtn.disabled=true;
+    elements.downloadBtn.classList.add('hidden'); elements.downloadBtn.href='#';
+    elements.recordingTimer.textContent='00:00';
+    elements.duration.textContent='00:00'; elements.confidence.textContent='--%'; elements.wordCount.textContent='0'; elements.speakers.textContent='0';
+    elements.emptyState.style.display='block';
+    elements.emptyState.innerHTML = `
+      <svg class="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+      </svg>
+      <p class="text-base font-medium mb-2">No transcript available</p>
+      <p class="text-sm">Start recording or upload an audio file to begin transcription</p>`;
+    updateSessionStatus('idle','Ready');
+    stopTimer();
+    resetDropZoneUI();
+  }
+
+  // Events
+  elements.recordBtn.addEventListener('click', ()=> state.isRecording ? stopRecording() : startRecording());
+  elements.fileInput.addEventListener('change', e => { const f=e.target.files?.[0]; if(f) handleFileSelect(f); });
+  elements.dropZone.addEventListener('click', ()=> elements.fileInput.click());
+  elements.dropZone.addEventListener('dragover', e => { e.preventDefault(); elements.dropZone.classList.add('drag-over'); });
+  elements.dropZone.addEventListener('dragleave', ()=> elements.dropZone.classList.remove('drag-over'));
+  elements.dropZone.addEventListener('drop', e => {
+    e.preventDefault(); elements.dropZone.classList.remove('drag-over');
+    const f=e.dataTransfer.files?.[0]; if(!f) return;
+    if(f.type.startsWith('audio/')) handleFileSelect(f); else alert('Please drop an audio file.');
+  });
+
+  elements.transcribeBtn.addEventListener('click', transcribeAudio);
+  elements.clearBtn.addEventListener('click', clearSession);
+
+  // Init
+  function initialize(){
+    updateTimestamp(); setInterval(updateTimestamp,60000);
+    const sessionNum = Math.floor(Math.random()*9000)+1000;
+    elements.sessionId.textContent=`MTS-2025-${sessionNum}`;
+    resetSession();
+  }
+  initialize();
+})();
+</script>
+</body>
+</html>
