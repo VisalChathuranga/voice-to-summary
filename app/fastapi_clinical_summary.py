@@ -87,7 +87,7 @@ BASE_TASK_INSTRUCTIONS = (
     "OUTPUT FORMAT:"
     "• Return exactly one cohesive paragraph in plain text."
     "• No headings, lists, bullets, or labeled sections (do not use 'Problem:', 'History:', 'Symptoms:', 'Social:', or 'Findings:')."
-    "• Target length ~60–130 words (may exceed slightly only to include critical safety information)."
+    "• Target length ~5–130 words (may exceed slightly only to include critical safety information)."
 
     "CONTENT TO COVER (prioritized):"
     "• Chief complaint and onset/mechanism with clear chronology."
@@ -102,6 +102,14 @@ BASE_TASK_INSTRUCTIONS = (
     "• Do not invent or infer facts not present in the input; omit unspecified details."
     "• Exclude normal/negative findings unless they materially change decisions."
     "• Preserve units, dates, and timeframes as given."
+
+    "EDGE CASES & LENGTH SCALING:"
+    "• If the input is empty, contains only greetings, or has fewer than ~5 clinically meaningful words, return a single plain sentence: "
+    "'No clinically meaningful information was provided to summarize.' (≤25 words)."
+    "• If the input is very short (<40 words), write 1–2 sentences totaling ≤50 words; include only concrete details explicitly present."
+    "• If the input is short (40–120 words), aim for ~60–90 words."
+    "• If the input is longer (>120 words), aim for ~90–130 words."
+    "• In all cases never exceed 130 words; prefer briefer output when source content is sparse."
 )
 
 
