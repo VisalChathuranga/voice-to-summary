@@ -49,7 +49,7 @@ class Settings(BaseModel):
     transcripts_dir: str = os.getenv("TRANSCRIPTS_DIR", "transcripts")
     output_dir: str = Field(default_factory=lambda: os.getenv("OUTPUT_DIR") or os.getenv("TRANSCRIPTS_DIR", "transcripts"))
 
-    # NOTE: we keep raw JSON off disk; pipeline writes only the role-labeled conversation
+    # Keep raw JSON?
     keep_raw_files: bool = _get_bool("KEEP_RAW_FILES", False)
 
 settings = Settings()

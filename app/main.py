@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from pathlib import Path
 import tempfile, shutil, os
 
@@ -10,10 +11,10 @@ from .settings import settings
 
 app = FastAPI(title="Voice → Roles → Summary")
 
-# (Optional) loosen CORS if your client runs elsewhere
+# CORS (loosen for local dev; tighten in prod)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten in prod if needed
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,18 +29,26 @@ def home():
 
 @app.post("/api/transcribe-and-summarize")
 async def api_transcribe_and_summarize(file: UploadFile = File(...)):
+    """
+    Same endpoint/contract, but all heavy work runs in a background thread.
+    This keeps the event loop free so many clients can be served concurrently.
+    """
     try:
         suffix = Path(file.filename).suffix.lower()
-        if suffix not in {".mp3", ".webm"}:
-            raise HTTPException(status_code=400, detail="Only .mp3 or .webm accepted")
+        if suffix not in {".mp3", ".webm", ".wav", ".m4a"}:
+            raise HTTPException(status_code=400, detail="Only .mp3/.webm/.wav/.m4a accepted")
 
+        # Save upload to a temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as tmp:
             shutil.copyfileobj(file.file, tmp)
             tmp_path = tmp.name
 
-        # ⬇️ pass original filename so we can create a friendly transcript name
-        result = transcribe_classify_summarize(tmp_path, original_filename=file.filename)
+        # ⬇️ Run your whole pipeline off the event loop
+        result = await run_in_threadpool(
+            transcribe_classify_summarize, tmp_path, file.filename
+        )
 
+        # Best-effort temp cleanup
         try:
             os.remove(tmp_path)
         except Exception:
@@ -47,7 +56,7 @@ async def api_transcribe_and_summarize(file: UploadFile = File(...)):
 
         return {
             "summary_text": result.summary.get("summary_text", ""),
-            "download_url": result.download_url,  # client uses this to save to Downloads
+            "download_url": result.download_url,
         }
     except HTTPException:
         raise

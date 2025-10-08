@@ -10,25 +10,17 @@ from .transcriber import transcribe_uploaded
 from .fastapi_clinical_summary import generate_summary_chat
 
 def _slugify(name: str) -> str:
-    """
-    Make a short, URL-safe slug from a filename (no extension).
-    """
     base = Path(name).stem
     base = base.strip().lower()
-    base = re.sub(r"[^a-z0-9]+", "_", base)  # keep letters/numbers, collapse others to _
+    base = re.sub(r"[^a-z0-9]+", "_", base)
     base = re.sub(r"_+", "_", base).strip("_")
     if not base:
         base = "conversation"
-    return base[:20]  # keep it short & friendly
+    return base[:20]
 
 def _friendly_job_name(original_filename: Optional[str]) -> str:
-    """
-    Build: <slug>_<YYYYMMDD>_<HHMMSS>_<shortid>
-    """
-    slug = _slugify(original_filename or "conversation")
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    shortid = uuid.uuid4().hex[:6]
-    return f"{slug}_{ts}_{shortid}"
+    return f"{_slugify(original_filename or 'conversation')}_{ts}_{uuid.uuid4().hex[:6]}"
 
 def _turns_to_text(turns: List[ClassifiedTurn]) -> str:
     return "\n".join(f"[{t.display_name}] {t.text}".strip() for t in turns)
@@ -51,7 +43,7 @@ def transcribe_classify_summarize(upload_path: str, original_filename: Optional[
     t: Dict[str, Any] = _as_result(transcribe_uploaded(upload_path))
     tr = TranscribeResult(**t)
 
-    # 2) Build base turns
+    # 2) Base turns
     def _words_to_text(words):
         if isinstance(words, list):
             parts = []
@@ -71,24 +63,24 @@ def transcribe_classify_summarize(upload_path: str, original_filename: Optional[
         text = r.text or _words_to_text(r.words)
         base_turns.append(Turn(speaker=r.speaker, text=text, words=r.words))
 
-    # 3) Classify roles
+    # 3) Role classification
     mapping = classify_roles(base_turns)
     classified: List[ClassifiedTurn] = relabel_turns(base_turns, mapping)
 
-    # 4) Friendly, short, unique name + save the ONLY .txt
+    # 4) Save final .txt
     friendly_job = _friendly_job_name(original_filename)
     rendered = _turns_to_text(classified)
     if tr.document_confidence is not None:
         rendered = f"Document confidence: {tr.document_confidence:.4f} ({tr.document_confidence*100:.1f}%)\n\n" + rendered
     conversation_txt_path = _save_txt(rendered, friendly_job)
 
-    # 5) Summary based on the role-labeled transcript
+    # 5) Summary (OpenAI)
     context = f"MEDICAL CASE DATA:\n\n=== HPI / TRANSCRIPT ===\n{rendered}\n"
     summary_text = generate_summary_chat(context)
     summary_json = {"summary_text": summary_text}
 
     return PipelineResponse(
-        job_name=tr.job_name,                   # keep original job id from AWS (internal)
+        job_name=tr.job_name,
         service=tr.service,
         document_confidence=tr.document_confidence,
         transcript_txt_path=conversation_txt_path,

@@ -21,13 +21,26 @@ MEDICAL_SPECIALTIES = {
     "urology": "UROLOGY",
 }
 
-# ---------- AWS clients ----------
+# ---------- AWS clients (tuned) ----------
 
 def aws_clients():
+    # Bigger HTTP pool + accelerated endpoint for S3
     s3_cfg = {"use_accelerate_endpoint": settings.s3_accelerate}
+    botocfg = BotoConfig(
+        s3=s3_cfg,
+        retries={"max_attempts": 5, "mode": "standard"},
+        max_pool_connections=max(32, settings.s3_max_concurrency * 2),
+        connect_timeout=10,
+        read_timeout=300,
+    )
     session = boto3.Session(region_name=settings.region)
-    s3 = session.client("s3", config=BotoConfig(s3=s3_cfg))
-    transcribe = session.client("transcribe")
+    s3 = session.client("s3", config=botocfg)
+    transcribe = session.client("transcribe", config=BotoConfig(
+        retries={"max_attempts": 5, "mode": "standard"},
+        max_pool_connections=32,
+        read_timeout=300,
+        connect_timeout=10,
+    ))
     return s3, transcribe
 
 # ---------- Helpers ----------
@@ -47,7 +60,6 @@ def ensure_bucket(s3, bucket: str, region: str):
 
 def ensure_acceleration(s3, bucket: str):
     if not settings.s3_enable_accelerate_if_needed:
-        print("[info] S3 accelerate not auto-enabled by config.")
         return
     try:
         conf = s3.get_bucket_accelerate_configuration(Bucket=bucket)
@@ -58,10 +70,8 @@ def ensure_acceleration(s3, bucket: str):
                 AccelerateConfiguration={"Status": "Enabled"}
             )
             print(f"[info] Enabled S3 Transfer Acceleration for bucket: {bucket}")
-        else:
-            print(f"[info] S3 Transfer Acceleration already enabled for bucket: {bucket}")
     except ClientError as e:
-        print(f"[warn] Could not enable acceleration (permission or bucket naming): {e}")
+        print(f"[warn] Could not enable acceleration: {e}")
 
 def _transfer_config() -> TransferConfig:
     return TransferConfig(
@@ -76,19 +86,15 @@ def upload_file_to_s3(s3, local_path: str, bucket: str, key: str):
     content_type, _ = mimetypes.guess_type(local_path)
     extra = {"ContentType": content_type or "application/octet-stream"}
     transfer.upload_file(local_path, bucket, key, extra_args=extra)
-    endpoint = "accelerate" if settings.s3_accelerate else "standard"
-    print(f"[info] Uploaded via {endpoint} endpoint: s3://{bucket}/{key}")
     return f"s3://{bucket}/{key}"
 
-# ---------- Audio conversion ----------
+# ---------- Audio re-encode (fast & small) ----------
 
 def _is_small_mp3(path: str) -> bool:
-    """Heuristic: if already mp3 and <= ~64kbps mono-like (size < 1.5 MB per 3 minutes), skip."""
     if not path.lower().endswith(".mp3"):
         return False
     try:
         size = os.path.getsize(path)
-        # For short clips this is fine; aim to skip re-encode for already-compressed mp3s
         return size < 1.5 * 1024 * 1024  # ~1.5MB
     except Exception:
         return False
@@ -126,7 +132,14 @@ def start_job(transcribe, media_s3_uri: str, safe_base: str) -> Tuple[str, str]:
                 "ShowAlternatives": True,
                 "MaxAlternatives": 2,
             },
-            "Specialty": MEDICAL_SPECIALTIES.get(settings.specialty, "PRIMARYCARE"),
+            "Specialty": {
+                "primarycare": "PRIMARYCARE",
+                "cardiology": "CARDIOLOGY",
+                "neurology": "NEUROLOGY",
+                "oncology": "ONCOLOGY",
+                "radiology": "RADIOLOGY",
+                "urology": "UROLOGY",
+            }.get(settings.specialty, "PRIMARYCARE"),
             "Type": "CONVERSATION",
         }
         transcribe.start_medical_transcription_job(**args)
@@ -150,7 +163,6 @@ def start_job(transcribe, media_s3_uri: str, safe_base: str) -> Tuple[str, str]:
         return job_name, "transcribe"
 
 def wait_for_job(transcribe, job_name: str, service: str, poll_sec: int = 3, timeout_min: int = 120) -> dict:
-    """Smaller poll interval -> lower latency to detect completion."""
     deadline = time.time() + timeout_min * 60
     while time.time() < deadline:
         if service == "medical":
@@ -273,7 +285,7 @@ def transcribe_uploaded(local_path: str) -> Dict:
     # 1) Convert (or skip) to small MP3
     mp3_path = to_mp3(local_path, settings.local_audio_dir)
 
-    # 2) Upload
+    # 2) Upload (accelerated + multipart + threads)
     base = os.path.basename(mp3_path)
     safe_base = sanitize_job_name(os.path.splitext(base)[0])
     key = f"input/{base}"
@@ -307,7 +319,7 @@ def transcribe_uploaded(local_path: str) -> Dict:
         "job_name": job_name,
         "service": "medical" if settings.use_medical else "standard",
         "document_confidence": conf,
-        "transcript_txt_path": "",  # pipeline creates the single conversation file
+        "transcript_txt_path": "",
         "download_url": "",
         "turns": turns,
     }
