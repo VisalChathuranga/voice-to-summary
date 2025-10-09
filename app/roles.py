@@ -31,7 +31,7 @@ Guidelines:
 - "doctor": clinician assessing, ordering tests, counseling.
 - "patient": symptoms/experience questions/answers.
 - "nurse": triage/vitals/logistics.
-- "other": family/admin/interpreter.
+- "other": family/admin/interpreter/third party.
 
 Speakers & excerpts:
 {bullets}
@@ -94,54 +94,69 @@ def relabel_turns(turns: List[Turn], mapping: Dict[str, Role]) -> List[Classifie
 
 def refine_dialogue_with_llm(classified_turns: List[ClassifiedTurn]) -> List[ClassifiedTurn]:
     """
-    Cleans each turn's text individually with LLM to fix errors/punctuation,
-    preserving exact order, number, and roles. No risk of turn count mismatch.
+    Uses LLM with holistic prompt to review the entire conversation: fix labels (doctor/patient/other/third party),
+    correct errors, reorder/split/merge for logical flow, clean text. Outputs new turns list for final .txt.
     """
     if not settings.openai_api_key or not classified_turns:
         return classified_turns  # No-op if no key or empty
 
-    system_prompt = """You are a medical transcription expert. Given a single speaker turn from a medical conversation, clean and correct ONLY this text:
+    # Build initial formatted dialogue
+    dialogue_input = "\n".join([f"[{t.display_name}] {t.text}" for t in classified_turns if t.text and t.text.strip()])
 
-1. Fix obvious transcription errors (e.g., 'sleep' → 'slipped', 'p' → 'foot' or 'pace', 'buckled' for knee injury, 'aging' → 'aching', 'injured occur' → 'injury occurred').
-2. Make the sentence(s) complete and natural; keep filler words like 'uh', 'um'.
-3. Add punctuation (periods, commas, question marks) for readability.
-4. Do not add, remove, or change facts/content—keep it concise and true to the original.
-5. Output ONLY the cleaned text (no [Role], no explanations)."""
+    system_prompt = """You are a medical professional reviewing a voice-to-text transcription of a doctor–patient conversation. The dialogue may contain errors such as mixed-up speaker labels, merged sentences, or misplaced responses due to transcription inaccuracies. Your task is to carefully read through the conversation and ensure that the dialogue is presented in the correct logical order, accurately distinguishing between the doctor and the patient. Make any necessary corrections to improve clarity and flow, but do not alter the original meaning or intent of the conversation.
 
-    refined_turns = classified_turns.copy()  # Start with originals
-    batch_size = 5  # Process in small batches to avoid token limits/costs
+Roles to use: [Doctor] for clinician, [Patient] for the person describing symptoms, [Other] for any third party (nurse, family, etc.).
 
-    for i in range(0, len(refined_turns), batch_size):
-        batch = refined_turns[i:i + batch_size]
-        batch_texts = [t.text.strip() for t in batch if t.text and t.text.strip()]
-        if not batch_texts:
-            continue
+1. Review the entire transcript for logical flow: questions from Doctor followed by Patient responses.
+2. Fix speaker labels if misattributed (e.g., swap if a symptom description is labeled as Doctor).
+3. Split merged turns or merge fragmented ones for natural dialogue.
+4. Clean text: fix errors (e.g., 'sleep' → 'slipped', 'aging' → 'aching'), add punctuation, keep fillers ('uh', 'um').
+5. Preserve all core content; do not add/remove facts.
 
-        # Prompt for batch (include role context if helpful)
-        user_prompt = f"Clean these {len(batch)} turns (roles: {[t.display_name for t in batch]}):\n\n" + "\n\n".join(batch_texts)
+Format output strictly as:
+- Each turn on a new line: [Doctor|Patient|Other] Cleaned dialogue here.
+- No extra text, explanations, or headers—just the conversation."""
 
-        try:
-            response = client.chat.completions.create(
-                model=settings.openai_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.1,
-                max_tokens=1000  # Plenty for small batch
-            )
+    try:
+        response = client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Raw transcript:\n\n{dialogue_input}"},
+            ],
+            temperature=0.1,
+            max_tokens=2000  # Adjust for length
+        )
 
-            cleaned_batch = response.choices[0].message.content.strip().split("\n\n")  # Assume LLM separates by double newline
-            cleaned_batch = [t.strip() for t in cleaned_batch if t.strip()]
+        cleaned_output = response.choices[0].message.content.strip()
 
-            # Update turns (match by index; trim if lengths differ)
-            for j, cleaned_text in enumerate(cleaned_batch[:len(batch)]):
-                orig_idx = i + j
-                if orig_idx < len(refined_turns) and cleaned_text:
-                    refined_turns[orig_idx].text = cleaned_text
+        # Parse into new turns
+        refined_turns = []
+        lines = cleaned_output.split("\n")
+        for line in lines:
+            line = line.strip()
+            if line.startswith("[") and "]" in line and line.endswith("?") or line.endswith(".") or " " in line.split("]", 1)[1]:
+                # Valid turn
+                role_part, text_part = line.split("]", 1)
+                role_str = role_part[1:].strip()  # e.g., "Doctor"
+                text = text_part.strip()
+                if role_str in ROLE_NAMES.values() and text:
+                    role_key = next((k for k, v in ROLE_NAMES.items() if v == role_str), "other")
+                    refined_turns.append(ClassifiedTurn(
+                        speaker="refined",  # Dummy
+                        text=text,
+                        words=None,  # Not preserved in holistic pass
+                        role=role_key,
+                        display_name=role_str,
+                    ))
 
-        except Exception as e:
-            print(f"[warn] LLM batch refinement failed at index {i}: {e}; skipping batch")
-            continue  # Keep originals for this batch
+        if not refined_turns:
+            print("[warn] No valid turns parsed from refinement; falling back")
+            return classified_turns
 
-    return refined_turns
+        print(f"[info] Refined {len(classified_turns)} → {len(refined_turns)} turns")
+        return refined_turns
+
+    except Exception as e:
+        print(f"[warn] LLM holistic refinement failed: {e}; using original")
+        return classified_turns

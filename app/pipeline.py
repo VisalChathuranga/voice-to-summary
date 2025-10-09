@@ -44,7 +44,7 @@ def transcribe_classify_summarize(upload_path: str, original_filename: Optional[
     t: Dict[str, Any] = _as_result(transcribe_uploaded(upload_path))
     tr = TranscribeResult(**t)
 
-    # 2) Base turns
+# 2) Base turns
     def _words_to_text(words):
         if isinstance(words, list):
             parts = []
@@ -68,18 +68,18 @@ def transcribe_classify_summarize(upload_path: str, original_filename: Optional[
     mapping = classify_roles(base_turns)
     classified: List[ClassifiedTurn] = relabel_turns(base_turns, mapping)
 
-    # 3b) NEW: LLM cleanup pass to fix any mis-attribution (keeps order/content)
+    # 3b) Holistic LLM refinement: fix labels (doctor/patient/other), flow, cleaning for final .txt
     if settings.role_refiner_enabled:
         classified = refine_dialogue_with_llm(classified)
 
-    # 4) Save final .txt
+    # 4) Save final .txt (updated with refined turns)
     friendly_job = _friendly_job_name(original_filename)
     rendered = _turns_to_text(classified)
     if tr.document_confidence is not None:
         rendered = f"Document confidence: {tr.document_confidence:.4f} ({tr.document_confidence*100:.1f}%)\n\n" + rendered
     conversation_txt_path = _save_txt(rendered, friendly_job)
 
-    # 5) Summary (OpenAI)
+    # 5) Summary (OpenAI) - uses refined rendered
     context = f"MEDICAL CASE DATA:\n\n=== HPI / TRANSCRIPT ===\n{rendered}\n"
     summary_text = generate_summary_chat(context)
     summary_json = {"summary_text": summary_text}
