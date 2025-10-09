@@ -1,3 +1,4 @@
+# settings.py
 from pydantic import BaseModel, Field
 import os
 from dotenv import load_dotenv
@@ -51,6 +52,9 @@ class Settings(BaseModel):
 
     # Keep raw JSON?
     keep_raw_files: bool = _get_bool("KEEP_RAW_FILES", False)
+
+    # ---- NEW: LLM role refiner ----
+    role_refiner_enabled: bool = _get_bool("ROLE_REFINER_ENABLED", True)
 
 settings = Settings()
 

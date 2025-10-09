@@ -1,3 +1,4 @@
+# pipeline.py
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import uuid, re
@@ -5,7 +6,7 @@ from datetime import datetime
 
 from .settings import settings
 from .models import TranscribeResult, Turn, PipelineResponse, ClassifiedTurn
-from .roles import classify_roles, relabel_turns
+from .roles import classify_roles, relabel_turns, refine_dialogue_with_llm
 from .transcriber import transcribe_uploaded
 from .fastapi_clinical_summary import generate_summary_chat
 
@@ -63,9 +64,13 @@ def transcribe_classify_summarize(upload_path: str, original_filename: Optional[
         text = r.text or _words_to_text(r.words)
         base_turns.append(Turn(speaker=r.speaker, text=text, words=r.words))
 
-    # 3) Role classification
+    # 3) Role classification (Speaker→Role)
     mapping = classify_roles(base_turns)
     classified: List[ClassifiedTurn] = relabel_turns(base_turns, mapping)
+
+    # 3b) NEW: LLM cleanup pass to fix any mis-attribution (keeps order/content)
+    if settings.role_refiner_enabled:
+        classified = refine_dialogue_with_llm(classified)
 
     # 4) Save final .txt
     friendly_job = _friendly_job_name(original_filename)
